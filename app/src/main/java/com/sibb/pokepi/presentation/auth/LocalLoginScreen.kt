@@ -157,35 +157,84 @@ fun LocalLoginScreen(
             Text("Iniciar Sesión")
         }
         
-        // Biometric login button (if available and enabled)
-        if (uiState.biometricCapability == BiometricCapability.AVAILABLE && 
-            uiState.isBiometricEnabled && 
-            uiState.hasLocalAccount) {
-            
+        // Biometric options
+        if (uiState.biometricCapability == BiometricCapability.AVAILABLE && uiState.hasLocalAccount) {
             Spacer(modifier = Modifier.height(16.dp))
             
-            OutlinedButton(
-                onClick = {
-                    activity?.let { fragmentActivity ->
-                        viewModel.authenticateWithBiometric(
-                            fragmentActivity,
-                            onLoginSuccess
-                        )
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !uiState.isLoading
+            if (uiState.isBiometricEnabled) {
+                // Biometric login button
+                OutlinedButton(
+                    onClick = {
+                        activity?.let { fragmentActivity ->
+                            viewModel.authenticateWithBiometric(
+                                fragmentActivity,
+                                onLoginSuccess
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !uiState.isLoading
+                ) {
+                    Text("🔒")
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Usar Biometría")
+                }
+            } else {
+                // Enable biometric button
+                OutlinedButton(
+                    onClick = { viewModel.enableBiometricForExistingUser() },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !uiState.isLoading
+                ) {
+                    Text("🔓")
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Habilitar Biometría")
+                }
+            }
+        }
+        
+        // Show biometric capability status for debugging
+        if (uiState.biometricCapability != BiometricCapability.AVAILABLE && uiState.hasLocalAccount) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
             ) {
-                Text("🔒")
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Usar Biometría")
+                Text(
+                    text = when (uiState.biometricCapability) {
+                        BiometricCapability.NO_HARDWARE -> "⚠️ Este dispositivo no tiene hardware biométrico"
+                        BiometricCapability.HARDWARE_UNAVAILABLE -> "⚠️ Hardware biométrico no disponible"
+                        BiometricCapability.NO_BIOMETRICS_ENROLLED -> "⚠️ No hay biometrías registradas en el dispositivo"
+                        BiometricCapability.SECURITY_UPDATE_REQUIRED -> "⚠️ Se requiere actualización de seguridad"
+                        BiometricCapability.UNSUPPORTED -> "⚠️ Biometría no soportada"
+                        else -> "🔍 Verificando capacidad biométrica..."
+                    },
+                    modifier = Modifier.padding(12.dp),
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
         }
         
         Spacer(modifier = Modifier.height(32.dp))
         
-        // Register link
+        // Instructions and Register link
         if (!uiState.hasLocalAccount) {
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                )
+            ) {
+                Text(
+                    text = "💡 Tip: Después de crear tu cuenta, podrás habilitar la autenticación biométrica en tu perfil para acceder más rápidamente.",
+                    modifier = Modifier.padding(12.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
             TextButton(
                 onClick = onRegisterClick,
                 enabled = !uiState.isLoading

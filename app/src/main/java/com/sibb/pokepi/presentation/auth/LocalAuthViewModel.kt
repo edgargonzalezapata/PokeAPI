@@ -133,4 +133,18 @@ class LocalAuthViewModel @Inject constructor(
     fun clearRegistrationSuccess() {
         _uiState.value = _uiState.value.copy(registrationSuccess = false)
     }
+    
+    fun enableBiometricForExistingUser() {
+        viewModelScope.launch {
+            localAuthRepository.enableBiometric()
+            _uiState.value = _uiState.value.copy(isBiometricEnabled = true)
+        }
+    }
+    
+    fun disableBiometric() {
+        viewModelScope.launch {
+            localAuthRepository.disableBiometric()
+            _uiState.value = _uiState.value.copy(isBiometricEnabled = false)
+        }
+    }
 }

@@ -9,10 +9,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.sibb.pokepi.data.model.GitHubUser
+import com.sibb.pokepi.data.repository.BiometricCapability
 
 @Composable
 fun ProfileScreen(
@@ -20,6 +23,13 @@ fun ProfileScreen(
     localUsername: String? = null,
     onLogout: () -> Unit
 ) {
+    val localAuthViewModel: LocalAuthViewModel = hiltViewModel()
+    val localUiState by localAuthViewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    
+    LaunchedEffect(Unit) {
+        localAuthViewModel.checkBiometricCapability(context)
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -173,6 +183,63 @@ fun ProfileScreen(
                     title = "Siguiendo",
                     value = user.following.toString()
                 )
+            }
+        }
+        
+        // Biometric Settings for local users
+        if (localUsername != null && localUiState.biometricCapability == BiometricCapability.AVAILABLE) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "⚙️ Configuración de Seguridad",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Autenticación Biométrica",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = if (localUiState.isBiometricEnabled) "Habilitada" else "Deshabilitada",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        
+                        Switch(
+                            checked = localUiState.isBiometricEnabled,
+                            onCheckedChange = { enabled ->
+                                if (enabled) {
+                                    localAuthViewModel.enableBiometricForExistingUser()
+                                } else {
+                                    localAuthViewModel.disableBiometric()
+                                }
+                            }
+                        )
+                    }
+                    
+                    if (localUiState.isBiometricEnabled) {
+                        Text(
+                            text = "🔒 Puedes usar tu huella dactilar o rostro para iniciar sesión",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
             }
         }
         
