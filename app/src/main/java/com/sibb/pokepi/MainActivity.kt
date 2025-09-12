@@ -22,6 +22,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.activity.compose.BackHandler
 import com.sibb.pokepi.presentation.auth.AuthViewModel
 import com.sibb.pokepi.presentation.auth.LoginScreen
+import com.sibb.pokepi.presentation.auth.LocalAuthViewModel
+import com.sibb.pokepi.presentation.auth.LocalLoginScreen
+import com.sibb.pokepi.presentation.auth.LocalRegisterScreen
 import com.sibb.pokepi.presentation.auth.ProfileScreen
 import com.sibb.pokepi.presentation.home.HomeScreen
 import com.sibb.pokepi.presentation.feed.FeedScreen
@@ -79,9 +82,11 @@ class MainActivity : ComponentActivity() {
 fun PokeApp() {
     val context = LocalContext.current
     val authViewModel: AuthViewModel = hiltViewModel()
+    val localAuthViewModel: LocalAuthViewModel = hiltViewModel()
     
     // Navigation state - inicio siempre va al feed
     var currentScreen by remember { mutableStateOf("feed") }
+    var authScreen by remember { mutableStateOf("local_login") } // "local_login", "local_register", "github_auth"
     
     // Asignar el ViewModel a la Activity
     LaunchedEffect(authViewModel) {
@@ -97,10 +102,19 @@ fun PokeApp() {
     }
     
     val uiState by authViewModel.uiState.collectAsState()
+    val localUiState by localAuthViewModel.uiState.collectAsState()
+    
+    // Determine if user is logged in through any method
+    val isLoggedIn = uiState.isLoggedIn || localUiState.isLocalLoggedIn
     
     // Manejar el botón de atrás - volver a feed (inicio)
-    BackHandler(enabled = currentScreen != "feed" && uiState.isLoggedIn) {
+    BackHandler(enabled = currentScreen != "feed" && isLoggedIn) {
         currentScreen = "feed"
+    }
+    
+    // Handle auth screen back navigation
+    BackHandler(enabled = authScreen != "local_login" && !isLoggedIn) {
+        authScreen = "local_login"
     }
     
     when {
@@ -124,32 +138,44 @@ fun PokeApp() {
             }
         }
         
-        uiState.isLoggedIn -> {
-            println("MainActivity - User is logged in, user: ${uiState.user?.login}")
-            uiState.user?.let { user ->
-                Scaffold(
-                    modifier = Modifier.fillMaxSize(),
-                    topBar = {
-                        TopAppBar(
-                            title = { 
-                                Text(
-                                    text = "¡Hola, ${user.name ?: user.login}!",
-                                    fontWeight = FontWeight.Medium
-                                ) 
-                            },
-                            actions = {
-                                IconButton(onClick = authViewModel::logout) {
-                                    Icon(
-                                        imageVector = Icons.Default.ExitToApp,
-                                        contentDescription = "Cerrar sesión"
-                                    )
-                                }
-                            },
-                            colors = TopAppBarDefaults.topAppBarColors(
-                                containerColor = MaterialTheme.colorScheme.primaryContainer
-                            )
+        isLoggedIn -> {
+            println("MainActivity - User is logged in")
+            
+            // Determine which user data to show
+            val displayName = when {
+                uiState.isLoggedIn && uiState.user != null -> uiState.user?.name ?: uiState.user?.login
+                localUiState.isLocalLoggedIn -> localUiState.storedUsername
+                else -> "Usuario"
+            } ?: "Usuario"
+            
+            Scaffold(
+                modifier = Modifier.fillMaxSize(),
+                topBar = {
+                    TopAppBar(
+                        title = { 
+                            Text(
+                                text = "¡Hola, $displayName!",
+                                fontWeight = FontWeight.Medium
+                            ) 
+                        },
+                        actions = {
+                            IconButton(onClick = { 
+                                // Logout from both systems
+                                authViewModel.logout()
+                                localAuthViewModel.logoutLocal()
+                                authScreen = "local_login"
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Default.ExitToApp,
+                                    contentDescription = "Cerrar sesión"
+                                )
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer
                         )
-                    },
+                    )
+                },
                     bottomBar = {
                         NavigationBar {
                             NavigationBarItem(
@@ -186,8 +212,13 @@ fun PokeApp() {
                                 onPokemonClick = { /* TODO: Navigate to details */ }
                             )
                             "profile" -> ProfileScreen(
-                                user = user,
-                                onLogout = authViewModel::logout
+                                user = uiState.user,
+                                localUsername = localUiState.storedUsername,
+                                onLogout = { 
+                                    authViewModel.logout()
+                                    localAuthViewModel.logoutLocal()
+                                    authScreen = "local_login"
+                                }
                             )
                         }
                         
@@ -205,35 +236,36 @@ fun PokeApp() {
                         }
                     }
                 }
-            } ?: run {
-                println("MainActivity - User is logged in but user data is null")
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(innerPadding)
-                    ) {
-                        LoginScreen(
-                            onAuthCodeReceived = authViewModel::handleAuthorizationCode,
-                            authUrl = authViewModel.getAuthUrl()
-                        )
-                    }
-                }
-            }
         }
         
         else -> {
-            println("MainActivity - Showing login screen")
-            Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)
-                ) {
-                    LoginScreen(
-                        onAuthCodeReceived = authViewModel::handleAuthorizationCode,
-                        authUrl = authViewModel.getAuthUrl()
-                    )
+            println("MainActivity - Showing auth screens")
+            when (authScreen) {
+                "local_login" -> LocalLoginScreen(
+                    onLoginSuccess = { currentScreen = "feed" },
+                    onRegisterClick = { authScreen = "local_register" },
+                    onGithubAuthClick = { authScreen = "github_auth" }
+                )
+                "local_register" -> LocalRegisterScreen(
+                    onBackClick = { authScreen = "local_login" },
+                    onRegisterSuccess = { 
+                        currentScreen = "feed" 
+                        authScreen = "local_login"
+                    }
+                )
+                "github_auth" -> {
+                    Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(innerPadding)
+                        ) {
+                            LoginScreen(
+                                onAuthCodeReceived = authViewModel::handleAuthorizationCode,
+                                authUrl = authViewModel.getAuthUrl()
+                            )
+                        }
+                    }
                 }
             }
         }

@@ -68,6 +68,9 @@ dependencies {
     // DataStore for storing tokens
     implementation("androidx.datastore:datastore-preferences:1.0.0")
     
+    // Biometric authentication
+    implementation("androidx.biometric:biometric:1.1.0")
+    
     // Image loading
     implementation("io.coil-kt:coil-compose:2.5.0")
     
