@@ -1,5 +1,6 @@
 package com.sibb.pokepi.presentation.home
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
@@ -17,6 +18,8 @@ import com.sibb.pokepi.data.model.GitHubUser
 @Composable
 fun HomeScreen(
     user: GitHubUser,
+    onNavigateToFeed: () -> Unit = {},
+    onNavigateToProfile: () -> Unit = {},
     onLogout: () -> Unit
 ) {
     Column(
@@ -67,12 +70,26 @@ fun HomeScreen(
             }
         }
         
+        Text(
+            text = "¡Toca las tarjetas para explorar!",
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Medium
+        )
+        
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Card(
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { onNavigateToFeed() },
+                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
@@ -85,18 +102,25 @@ fun HomeScreen(
                     Text(
                         text = "Explorar",
                         style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Pokémon",
+                        text = "Feed Pokémon",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        fontWeight = FontWeight.Medium
                     )
                 }
             }
             
             Card(
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { onNavigateToFeed() },
+                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                )
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
@@ -109,24 +133,42 @@ fun HomeScreen(
                     Text(
                         text = "Favoritos",
                         style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Tu lista",
+                        text = "Mis Pokémon",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        fontWeight = FontWeight.Medium
                     )
                 }
             }
         }
         
         Text(
-            text = "Próximamente podrás explorar el mundo Pokémon, buscar tus favoritos y crear tu propia colección.",
+            text = "Explora el mundo Pokémon, encuentra tus favoritos y crea tu propia colección.",
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 8.dp)
         )
+        
+        // Botón prominente para el Feed
+        Button(
+            onClick = onNavigateToFeed,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary
+            )
+        ) {
+            Text(
+                text = "🚀 Ver Feed de Pokémon",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+        }
         
         Spacer(modifier = Modifier.weight(1f))
         
@@ -135,15 +177,18 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             OutlinedButton(
-                onClick = { /* Navegar a perfil */ },
+                onClick = onNavigateToProfile,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Ver Perfil Completo")
             }
             
-            Button(
+            OutlinedButton(
                 onClick = onLogout,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                )
             ) {
                 Text("Cerrar Sesión")
             }

@@ -1,17 +1,25 @@
 package com.sibb.pokepi.data.repository
 
 import com.sibb.pokepi.data.api.GitHubApiClient
+import com.sibb.pokepi.data.api.GitHubApiService
 import com.sibb.pokepi.data.model.GitHubUser
-import com.sibb.pokepi.data.network.NetworkModule
 import com.sibb.pokepi.data.storage.TokenStorage
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import retrofit2.Retrofit
+import javax.inject.Inject
+import javax.inject.Named
+import javax.inject.Singleton
 
-class AuthRepository(private val tokenStorage: TokenStorage) {
+@Singleton
+class AuthRepository @Inject constructor(
+    private val tokenStorage: TokenStorage,
+    @Named("github") private val githubApiService: GitHubApiService,
+    @Named("github_oauth") private val githubOAuthRetrofit: Retrofit
+) {
     
-    private val githubApiService = NetworkModule.githubApiService
-    private val githubOAuthService = NetworkModule.githubOAuthService
+    private val githubOAuthService = githubOAuthRetrofit.create(GitHubApiService::class.java)
     
     suspend fun exchangeCodeForToken(code: String): Result<String> {
         return try {
@@ -56,6 +64,7 @@ class AuthRepository(private val tokenStorage: TokenStorage) {
     }
     
     suspend fun logout() {
+        // Solo limpiar tokens, NO limpiar datos de la base de datos (favoritos, stats, etc.)
         tokenStorage.clearTokens()
     }
     

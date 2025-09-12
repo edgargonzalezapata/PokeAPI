@@ -4,10 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.sibb.pokepi.data.model.GitHubUser
 import com.sibb.pokepi.data.repository.AuthRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 data class AuthUiState(
     val isLoading: Boolean = false,
@@ -17,7 +19,10 @@ data class AuthUiState(
     val showWelcome: Boolean = false
 )
 
-class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
+@HiltViewModel
+class AuthViewModel @Inject constructor(
+    private val authRepository: AuthRepository
+) : ViewModel() {
     
     private val _uiState = MutableStateFlow(AuthUiState())
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
@@ -30,10 +35,16 @@ class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
         viewModelScope.launch {
             authRepository.isLoggedIn().collect { isLoggedIn ->
                 println("AuthViewModel - isLoggedIn: $isLoggedIn")
-                _uiState.value = _uiState.value.copy(isLoggedIn = isLoggedIn)
                 if (isLoggedIn && _uiState.value.user == null) {
                     println("AuthViewModel - Getting current user")
                     getCurrentUser()
+                } else if (!isLoggedIn) {
+                    // Solo limpiar estado de UI, NO datos persistentes
+                    _uiState.value = _uiState.value.copy(
+                        isLoggedIn = false,
+                        user = null,
+                        showWelcome = false
+                    )
                 }
             }
         }
@@ -85,6 +96,7 @@ class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
     
     fun logout() {
         viewModelScope.launch {
+            // Solo cerrar sesión, NO limpiar datos del usuario (favoritos, stats, etc.)
             authRepository.logout()
             _uiState.value = AuthUiState()
         }
@@ -92,6 +104,7 @@ class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
     
     fun clearData() {
         viewModelScope.launch {
+            // Este método puede ser usado para limpiar todo si es necesario en el futuro
             authRepository.logout()
             _uiState.value = AuthUiState()
         }
