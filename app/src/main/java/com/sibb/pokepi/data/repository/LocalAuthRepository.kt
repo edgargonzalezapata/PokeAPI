@@ -93,32 +93,54 @@ class LocalAuthRepository @Inject constructor(
         onSuccess: () -> Unit,
         onError: (String) -> Unit
     ) {
-        val executor = ContextCompat.getMainExecutor(activity)
-        val biometricPrompt = BiometricPrompt(activity, executor,
-            object : BiometricPrompt.AuthenticationCallback() {
-                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                    super.onAuthenticationError(errorCode, errString)
-                    onError(errString.toString())
-                }
-                
-                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                    super.onAuthenticationSucceeded(result)
-                    onSuccess()
-                }
-                
-                override fun onAuthenticationFailed() {
-                    super.onAuthenticationFailed()
-                    onError("Autenticación biométrica fallida")
-                }
-            })
-        
-        val promptInfo = BiometricPrompt.PromptInfo.Builder()
-            .setTitle("Autenticación Biométrica")
-            .setSubtitle("Usa tu huella dactilar o reconocimiento facial para acceder")
-            .setNegativeButtonText("Cancelar")
-            .build()
-        
-        biometricPrompt.authenticate(promptInfo)
+        println("DEBUG: Repository.authenticateWithBiometric llamado")
+        try {
+            val executor = ContextCompat.getMainExecutor(activity)
+            val biometricPrompt = BiometricPrompt(activity, executor,
+                object : BiometricPrompt.AuthenticationCallback() {
+                    override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                        super.onAuthenticationError(errorCode, errString)
+                        when (errorCode) {
+                            BiometricPrompt.ERROR_USER_CANCELED,
+                            BiometricPrompt.ERROR_NEGATIVE_BUTTON,
+                            BiometricPrompt.ERROR_CANCELED -> {
+                                onError("Autenticación cancelada")
+                            }
+                            BiometricPrompt.ERROR_NO_BIOMETRICS -> {
+                                onError("No hay biometrías registradas en el dispositivo")
+                            }
+                            BiometricPrompt.ERROR_HW_NOT_PRESENT -> {
+                                onError("Hardware biométrico no disponible")
+                            }
+                            else -> {
+                                onError("Error de autenticación: $errString")
+                            }
+                        }
+                    }
+                    
+                    override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                        super.onAuthenticationSucceeded(result)
+                        onSuccess()
+                    }
+                    
+                    override fun onAuthenticationFailed() {
+                        super.onAuthenticationFailed()
+                        onError("Autenticación biométrica fallida. Intenta de nuevo.")
+                    }
+                })
+            
+            val promptInfo = BiometricPrompt.PromptInfo.Builder()
+                .setTitle("Autenticación Biométrica")
+                .setSubtitle("Usa tu huella dactilar o reconocimiento facial para acceder")
+                .setNegativeButtonText("Cancelar")
+                .build()
+            
+            println("DEBUG: A punto de llamar biometricPrompt.authenticate()")
+            biometricPrompt.authenticate(promptInfo)
+            println("DEBUG: biometricPrompt.authenticate() llamado")
+        } catch (e: Exception) {
+            onError("Error al inicializar autenticación biométrica: ${e.message}")
+        }
     }
     
     suspend fun clearAllLocalData() {

@@ -29,6 +29,9 @@ interface PokemonDao {
     @Query("SELECT * FROM pokemon WHERE types LIKE '%' || :query || '%' ORDER BY id ASC")
     fun searchPokemonByTypePaged(query: String): PagingSource<Int, Pokemon>
     
+    @Query("SELECT * FROM pokemon WHERE types LIKE '%' || :query || '%' ORDER BY id ASC")
+    suspend fun searchPokemonByType(query: String): List<Pokemon>
+    
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPokemon(pokemon: Pokemon)
     
@@ -38,6 +41,7 @@ interface PokemonDao {
     @Update
     suspend fun updatePokemon(pokemon: Pokemon)
     
+    @Transaction
     @Query("UPDATE pokemon SET isFavorite = :isFavorite WHERE id = :id")
     suspend fun updateFavoriteStatus(id: Int, isFavorite: Boolean)
     
