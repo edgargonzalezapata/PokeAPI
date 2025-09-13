@@ -217,29 +217,7 @@ cd PokeAPI
 ./gradlew assembleRelease
 ```
 
-## 🚧 Roadmap
 
-### ✅ Completado
-- [x] **Integración PokéAPI** - Feed completo con datos reales
-- [x] **Sistema de Favoritos** - Por usuario con persistencia
-- [x] **Búsqueda de Pokémon** - Por nombre y tipo
-- [x] **Autenticación Dual** - GitHub OAuth + Local + Biométrica
-- [x] **Cache Offline** - Room database con migración automática
-- [x] **Paginación Infinita** - Paging 3 con performance optimizada
-- [x] **Estadísticas de Usuario** - Tracking de actividad
-
-### 🔄 En Desarrollo  
-- [ ] **Detalles de Pokémon** - Modal con stats completos y evoluciones
-- [ ] **Comparador** - Side-by-side de múltiples Pokémon
-- [ ] **Filtros Avanzados** - Por stats, generación, habilidades
-
-### 📋 Planeado
-- [ ] **Modo Batalla** - Simulador básico de combates
-- [ ] **Equipos Personalizados** - Creación y gestión de equipos
-- [ ] **Notificaciones** - Pokémon del día y eventos
-- [ ] **Sincronización Cloud** - Backup de datos de usuario
-- [ ] **Modo Oscuro** - Theme switcher automático/manual
-- [ ] **Compartir** - Export de favoritos y estadísticas
 
 ## 🤝 Contribuir
 
