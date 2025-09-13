@@ -104,12 +104,17 @@ class LocalAuthViewModel @Inject constructor(
     
     fun authenticateWithBiometric(activity: FragmentActivity, onSuccess: () -> Unit) {
         println("DEBUG: ViewModel.authenticateWithBiometric llamado")
+        println("DEBUG: Activity: ${activity::class.simpleName}")
+        println("DEBUG: UI State antes: isLoading=${_uiState.value.isLoading}, isBiometricEnabled=${_uiState.value.isBiometricEnabled}")
+        
         // Clear any previous errors
         _uiState.value = _uiState.value.copy(error = null, isLoading = true)
+        println("DEBUG: UI State actualizado a isLoading=true")
         
         localAuthRepository.authenticateWithBiometric(
             activity,
             onSuccess = {
+                println("DEBUG: Repository reportó éxito, actualizando estado...")
                 viewModelScope.launch {
                     // Set logged in state directly for biometric login
                     localAuthRepository.setLocalLoggedIn(true)
@@ -118,16 +123,19 @@ class LocalAuthViewModel @Inject constructor(
                         isLoading = false,
                         error = null
                     )
+                    println("DEBUG: Estado actualizado, llamando onSuccess")
                     onSuccess()
                 }
             },
             onError = { error ->
+                println("DEBUG: Repository reportó error: $error")
                 _uiState.value = _uiState.value.copy(
                     error = error,
                     isLoading = false
                 )
             }
         )
+        println("DEBUG: Llamada a repository completada")
     }
     
     fun logoutLocal() {

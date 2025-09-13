@@ -12,6 +12,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
+import androidx.activity.ComponentActivity
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -35,16 +37,7 @@ fun LocalLoginScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
-    val fragmentActivity = remember(context) {
-        var ctx = context
-        while (ctx is android.content.ContextWrapper) {
-            if (ctx is FragmentActivity) {
-                return@remember ctx
-            }
-            ctx = ctx.baseContext
-        }
-        null
-    }
+    val activity = context as? FragmentActivity
     val keyboardController = LocalSoftwareKeyboardController.current
     
     var username by remember { mutableStateOf("") }
@@ -58,7 +51,9 @@ fun LocalLoginScreen(
     LaunchedEffect(Unit) {
         println("DEBUG: LocalLoginScreen inicializado")
         println("DEBUG: Context tipo: ${context::class.simpleName}")
-        println("DEBUG: FragmentActivity encontrado: ${fragmentActivity != null}")
+        println("DEBUG: Context es FragmentActivity: ${context is FragmentActivity}")
+        println("DEBUG: Activity encontrado: ${activity != null}")
+        println("DEBUG: Activity tipo: ${activity?.let { it::class.simpleName }}")
         viewModel.checkBiometricCapability(context)
     }
     
@@ -188,13 +183,17 @@ fun LocalLoginScreen(
                 OutlinedButton(
                     onClick = {
                         println("DEBUG: Botón biométrico presionado")
-                        fragmentActivity?.let { fActivity ->
-                            println("DEBUG: FragmentActivity encontrado: ${fActivity::class.simpleName}")
-                            viewModel.authenticateWithBiometric(
-                                fActivity,
-                                onLoginSuccess
-                            )
-                        } ?: println("DEBUG: FragmentActivity es null")
+                        activity?.let { fActivity ->
+                            println("DEBUG: Activity encontrado: ${fActivity::class.simpleName}")
+                            viewModel.authenticateWithBiometric(fActivity) {
+                                println("DEBUG: Autenticación biométrica exitosa")
+                                onLoginSuccess()
+                            }
+                        } ?: run {
+                            println("DEBUG: Activity es null - Error de contexto")
+                            println("DEBUG: Context actual: ${context::class.simpleName}")
+                            println("DEBUG: Context es FragmentActivity: ${context is FragmentActivity}")
+                        }
                     },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !uiState.isLoading
