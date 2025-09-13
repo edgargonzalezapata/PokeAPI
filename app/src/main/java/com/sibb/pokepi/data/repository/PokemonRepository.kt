@@ -10,6 +10,7 @@ import com.sibb.pokepi.data.model.Pokemon
 import com.sibb.pokepi.data.model.UserStats
 import com.sibb.pokepi.data.paging.TypeSearchPagingSource
 import com.sibb.pokepi.data.paging.UserFavoritePokemonPagingSource
+import com.sibb.pokepi.data.paging.NameSearchPagingSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -116,7 +117,8 @@ class PokemonRepository @Inject constructor(
             pagingSourceFactory = { 
                 when (searchType) {
                     "type" -> TypeSearchPagingSource(pokeApiService, pokemonDao, query)
-                    else -> pokemonDao.searchPokemonByNamePaged(query)
+                    "name" -> NameSearchPagingSource(pokeApiService, pokemonDao, query)
+                    else -> NameSearchPagingSource(pokeApiService, pokemonDao, query)
                 }
             }
         ).flow

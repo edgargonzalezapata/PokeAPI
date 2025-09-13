@@ -38,6 +38,23 @@ interface PokemonDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAllPokemon(pokemon: List<Pokemon>)
     
+    // Insert Pokemon preserving local data (favorites, view count, etc.)
+    suspend fun insertPokemonPreservingLocalData(pokemon: Pokemon) {
+        val existingPokemon = getPokemonById(pokemon.id)
+        if (existingPokemon != null) {
+            // Preserve local data when updating from API
+            val pokemonWithLocalData = pokemon.copy(
+                isFavorite = existingPokemon.isFavorite,
+                viewCount = existingPokemon.viewCount,
+                firstSeenAt = existingPokemon.firstSeenAt
+            )
+            insertPokemon(pokemonWithLocalData)
+        } else {
+            // First time inserting, use API data as-is
+            insertPokemon(pokemon)
+        }
+    }
+    
     @Update
     suspend fun updatePokemon(pokemon: Pokemon)
     

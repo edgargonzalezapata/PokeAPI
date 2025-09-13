@@ -7,4 +7,11 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    
+    <!-- Pokemon notification colors -->
+    <color name="pokemon_fire">#FFFF6B6B</color>
+    <color name="pokemon_heart">#FFFF1744</color>
+    <color name="pokemon_electric">#FFFAD02E</color>
+    <color name="pokemon_water">#FF4ECDC4</color>
+    <color name="pokemon_grass">#FF95E1D3</color>
 </resources>

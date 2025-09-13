@@ -2,6 +2,8 @@ package com.sibb.pokepi.presentation.auth
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,7 +23,8 @@ import com.sibb.pokepi.data.repository.BiometricCapability
 fun ProfileScreen(
     user: GitHubUser? = null,
     localUsername: String? = null,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onNotificationSettingsClick: () -> Unit = {}
 ) {
     val localAuthViewModel: LocalAuthViewModel = hiltViewModel()
     val localUiState by localAuthViewModel.uiState.collectAsState()
@@ -239,6 +242,47 @@ fun ProfileScreen(
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
+                }
+            }
+        }
+        
+        // Notification Settings Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Notifications,
+                    contentDescription = "Notificaciones",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
+                
+                Spacer(modifier = Modifier.width(12.dp))
+                
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Configurar Notificaciones",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "Pokémon del día, favoritos y más",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                
+                OutlinedButton(
+                    onClick = onNotificationSettingsClick
+                ) {
+                    Text("Configurar")
                 }
             }
         }

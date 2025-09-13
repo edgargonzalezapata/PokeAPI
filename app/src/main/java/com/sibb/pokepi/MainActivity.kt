@@ -30,6 +30,7 @@ import com.sibb.pokepi.presentation.auth.ProfileScreen
 import com.sibb.pokepi.presentation.home.HomeScreen
 import com.sibb.pokepi.presentation.feed.FeedScreen
 import com.sibb.pokepi.presentation.favorites.FavoritesScreen
+import com.sibb.pokepi.presentation.notifications.NotificationSettingsScreen
 import com.sibb.pokepi.ui.theme.PokePITheme
 import com.sibb.pokepi.ui.components.PokeBallLoadingIndicator
 import dagger.hilt.android.AndroidEntryPoint
@@ -109,9 +110,9 @@ fun PokeApp() {
     // Determine if user is logged in through any method
     val isLoggedIn = uiState.isLoggedIn || localUiState.isLocalLoggedIn
     
-    // Manejar el botón de atrás - volver a feed (inicio)
+    // Manejar el botón de atrás - volver a feed (inicio) o perfil desde notificaciones
     BackHandler(enabled = currentScreen != "feed" && isLoggedIn) {
-        currentScreen = "feed"
+        currentScreen = if (currentScreen == "notifications") "profile" else "feed"
     }
     
     // Handle auth screen back navigation
@@ -226,7 +227,13 @@ fun PokeApp() {
                                     authViewModel.logout()
                                     localAuthViewModel.logoutLocal()
                                     authScreen = "local_login"
+                                },
+                                onNotificationSettingsClick = { 
+                                    currentScreen = "notifications" 
                                 }
+                            )
+                            "notifications" -> NotificationSettingsScreen(
+                                onBackClick = { currentScreen = "profile" }
                             )
                         }
                         
