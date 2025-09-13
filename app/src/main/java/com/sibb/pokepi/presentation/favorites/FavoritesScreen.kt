@@ -26,6 +26,7 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import coil.compose.AsyncImage
 import com.sibb.pokepi.data.model.Pokemon
 import com.sibb.pokepi.ui.components.CenterLoading
+import com.sibb.pokepi.presentation.detail.PokemonDetailModal
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -45,6 +46,7 @@ fun FavoritesScreen(
     }
     val uiState by viewModel.uiState.collectAsState()
     val favoriteItems = viewModel.favoritePokemons.collectAsLazyPagingItems()
+    var selectedPokemon by remember { mutableStateOf<Pokemon?>(null) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Header
@@ -129,7 +131,7 @@ fun FavoritesScreen(
                                     viewModel.toggleFavorite(it.id, userId)
                                 }
                             },
-                            onClick = { onPokemonClick(it) },
+                            onClick = { selectedPokemon = it },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -162,6 +164,22 @@ fun FavoritesScreen(
                 }
             }
         }
+    }
+    
+    // Modal de detalle del Pokémon
+    selectedPokemon?.let { pokemon ->
+        val isFavorite = uiState.favoriteStatus[pokemon.id] ?: true // Default true en favoritos
+        
+        PokemonDetailModal(
+            pokemon = pokemon,
+            isFavorite = isFavorite,
+            onDismiss = { selectedPokemon = null },
+            onFavoriteClick = {
+                currentUserId?.let { userId ->
+                    viewModel.toggleFavorite(pokemon.id, userId)
+                }
+            }
+        )
     }
 }
 

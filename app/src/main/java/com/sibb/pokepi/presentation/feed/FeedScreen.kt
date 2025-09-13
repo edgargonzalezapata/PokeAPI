@@ -37,6 +37,7 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import coil.compose.AsyncImage
 import com.sibb.pokepi.data.model.Pokemon
 import com.sibb.pokepi.data.model.UserStats
+import com.sibb.pokepi.presentation.detail.PokemonDetailModal
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -53,6 +54,7 @@ fun FeedScreen(
     var searchQuery by remember { mutableStateOf("") }
     var searchType by remember { mutableStateOf("name") } // "name", "type"
     var showTypeDropdown by remember { mutableStateOf(false) }
+    var selectedPokemon by remember { mutableStateOf<Pokemon?>(null) }
     
     // Monitor loading state to control pokeball visibility
     val isLoadingResults = pokemonItems.loadState.refresh is LoadState.Loading
@@ -333,7 +335,7 @@ fun FeedScreen(
                                         viewModel.toggleFavorite(it.id, userId)
                                     }
                                 },
-                                onClick = { onPokemonClick(it) },
+                                onClick = { selectedPokemon = it },
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
@@ -367,6 +369,22 @@ fun FeedScreen(
                 }
             }
         }
+    }
+    
+    // Modal de detalle del Pokémon
+    selectedPokemon?.let { pokemon ->
+        val isFavorite = uiState.favoriteStatus[pokemon.id] ?: false
+        
+        PokemonDetailModal(
+            pokemon = pokemon,
+            isFavorite = isFavorite,
+            onDismiss = { selectedPokemon = null },
+            onFavoriteClick = {
+                currentUserId?.let { userId ->
+                    viewModel.toggleFavorite(pokemon.id, userId)
+                }
+            }
+        )
     }
 }
 
