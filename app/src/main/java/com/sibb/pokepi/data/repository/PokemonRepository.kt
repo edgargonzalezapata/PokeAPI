@@ -4,8 +4,12 @@ import androidx.paging.*
 import com.sibb.pokepi.data.api.PokeApiService
 import com.sibb.pokepi.data.database.PokemonDao
 import com.sibb.pokepi.data.database.UserStatsDao
+import com.sibb.pokepi.data.database.UserFavoriteDao
+import com.sibb.pokepi.data.model.UserFavorite
 import com.sibb.pokepi.data.model.Pokemon
 import com.sibb.pokepi.data.model.UserStats
+import com.sibb.pokepi.data.paging.TypeSearchPagingSource
+import com.sibb.pokepi.data.paging.UserFavoritePokemonPagingSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -16,7 +20,8 @@ import javax.inject.Singleton
 class PokemonRepository @Inject constructor(
     private val pokeApiService: PokeApiService,
     private val pokemonDao: PokemonDao,
-    private val userStatsDao: UserStatsDao
+    private val userStatsDao: UserStatsDao,
+    private val userFavoriteDao: UserFavoriteDao
 ) {
     
     @OptIn(ExperimentalPagingApi::class)
@@ -57,37 +62,45 @@ class PokemonRepository @Inject constructor(
         }
     }
     
-    suspend fun toggleFavorite(pokemonId: Int): Result<Boolean> {
+    suspend fun toggleFavorite(pokemonId: Int, userId: String): Result<Boolean> {
         return try {
-            val pokemon = pokemonDao.getPokemonById(pokemonId)
-            if (pokemon != null) {
-                val newFavoriteStatus = !pokemon.isFavorite
-                pokemonDao.updateFavoriteStatus(pokemonId, newFavoriteStatus)
-                println("PokemonRepository - Toggled favorite for Pokemon $pokemonId: $newFavoriteStatus")
-                updateUserStats()
-                Result.success(newFavoriteStatus)
+            val existingFavorite = userFavoriteDao.getUserFavorite(userId, pokemonId)
+            val newFavoriteStatus = if (existingFavorite != null) {
+                userFavoriteDao.deleteUserFavorite(userId, pokemonId)
+                false
             } else {
-                println("PokemonRepository - Pokemon $pokemonId not found")
-                Result.failure(Exception("Pokemon not found"))
+                userFavoriteDao.insertUserFavorite(UserFavorite(userId, pokemonId))
+                true
             }
+            println("PokemonRepository - Toggled favorite for Pokemon $pokemonId (User: $userId): $newFavoriteStatus")
+            updateUserStats(userId)
+            Result.success(newFavoriteStatus)
         } catch (e: Exception) {
             println("PokemonRepository - Error toggling favorite: ${e.message}")
             Result.failure(e)
         }
     }
     
-    fun getFavoritesPokemon(): Flow<List<Pokemon>> {
-        return pokemonDao.getFavoritesPokemon()
+    fun getFavoritesPokemon(userId: String): Flow<List<Pokemon>> {
+        return userFavoriteDao.getUserFavorites(userId).map { favorites ->
+            favorites.mapNotNull { favorite ->
+                pokemonDao.getPokemonById(favorite.pokemonId)
+            }
+        }
     }
     
-    fun getFavoritePokemons(): Flow<PagingData<Pokemon>> {
+    fun getFavoritePokemons(userId: String): Flow<PagingData<Pokemon>> {
         return Pager(
             config = PagingConfig(
                 pageSize = 20,
                 enablePlaceholders = false
             ),
-            pagingSourceFactory = { pokemonDao.getFavoritePokemonPaged() }
+            pagingSourceFactory = { UserFavoritePokemonPagingSource(userFavoriteDao, pokemonDao, userId) }
         ).flow
+    }
+    
+    suspend fun isFavorite(pokemonId: Int, userId: String): Boolean {
+        return userFavoriteDao.isFavorite(userId, pokemonId)
     }
     
     fun searchPokemon(query: String): Flow<List<Pokemon>> {
@@ -102,7 +115,7 @@ class PokemonRepository @Inject constructor(
             ),
             pagingSourceFactory = { 
                 when (searchType) {
-                    "type" -> pokemonDao.searchPokemonByTypePaged(query)
+                    "type" -> TypeSearchPagingSource(pokeApiService, pokemonDao, query)
                     else -> pokemonDao.searchPokemonByNamePaged(query)
                 }
             }
@@ -128,29 +141,59 @@ class PokemonRepository @Inject constructor(
         userStatsDao.updateTimeSpent(additionalTime, System.currentTimeMillis())
     }
     
-    private suspend fun updateUserStats() {
+    private suspend fun updateUserStats(userId: String? = null) {
         val totalSeen = pokemonDao.getTotalPokemonCount()
-        val totalFavorites = pokemonDao.getFavoritesCount()
+        val totalFavorites = if (userId != null) {
+            userFavoriteDao.getUserFavoritesCount(userId)
+        } else {
+            pokemonDao.getFavoritesCount()
+        }
         
+        println("PokemonRepository - Updating stats: seen=$totalSeen, favorites=$totalFavorites")
         userStatsDao.updatePokemonSeenCount(totalSeen)
         userStatsDao.updateFavoritesCount(totalFavorites)
     }
     
     suspend fun getAllTypes(): List<String> {
         return try {
+            // First try to get from API
+            val response = pokeApiService.getAllTypes()
+            if (response.isSuccessful && response.body() != null) {
+                val apiTypes = response.body()!!.results
+                    .map { it.name }
+                    .filter { it in listOf("normal", "fire", "water", "electric", "grass", "ice", "fighting", "poison", "ground", "flying", "psychic", "bug", "rock", "ghost", "dragon", "dark", "steel", "fairy") }
+                    .sorted()
+                
+                if (apiTypes.isNotEmpty()) {
+                    return apiTypes
+                }
+            }
+            
+            // Fallback to local database
             val typesStrings = pokemonDao.getAllTypes()
             val allTypes = mutableSetOf<String>()
             
             typesStrings.forEach { typesJson ->
-                // Parse the JSON string to extract individual types
-                // Since types are stored as JSON, we need to extract the type names
                 val typeNames = extractTypeNamesFromJson(typesJson)
                 allTypes.addAll(typeNames)
             }
             
             allTypes.toList().sorted()
         } catch (e: Exception) {
-            emptyList()
+            // If API fails, try local database as fallback
+            try {
+                val typesStrings = pokemonDao.getAllTypes()
+                val allTypes = mutableSetOf<String>()
+                
+                typesStrings.forEach { typesJson ->
+                    val typeNames = extractTypeNamesFromJson(typesJson)
+                    allTypes.addAll(typeNames)
+                }
+                
+                allTypes.toList().sorted()
+            } catch (localException: Exception) {
+                emptyList()
+            }
         }
     }
     

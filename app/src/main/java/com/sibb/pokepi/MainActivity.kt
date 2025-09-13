@@ -147,6 +147,13 @@ fun PokeApp() {
                 else -> "Usuario"
             } ?: "Usuario"
             
+            // Determine current user ID for favorites
+            val currentUserId = when {
+                uiState.isLoggedIn && uiState.user != null -> uiState.user?.login
+                localUiState.isLocalLoggedIn -> localUiState.currentUserId
+                else -> null
+            }
+            
             Scaffold(
                 modifier = Modifier.fillMaxSize(),
                 topBar = {
@@ -205,10 +212,12 @@ fun PokeApp() {
                     ) {
                         when (currentScreen) {
                             "feed" -> FeedScreen(
-                                onPokemonClick = { /* TODO: Navigate to details */ }
+                                onPokemonClick = { /* TODO: Navigate to details */ },
+                                currentUserId = currentUserId
                             )
                             "favorites" -> FavoritesScreen(
-                                onPokemonClick = { /* TODO: Navigate to details */ }
+                                onPokemonClick = { /* TODO: Navigate to details */ },
+                                currentUserId = currentUserId
                             )
                             "profile" -> ProfileScreen(
                                 user = uiState.user,

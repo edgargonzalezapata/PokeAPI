@@ -14,16 +14,19 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.onEach
 import javax.inject.Inject
 
 data class FeedUiState(
     val isLoading: Boolean = false,
+    val isSearching: Boolean = false,
     val error: String? = null,
     val userStats: UserStats = UserStats(),
     val searchQuery: String = "",
     val searchType: String = "name",
     val availableTypes: List<String> = emptyList(),
-    val selectedType: String = ""
+    val selectedType: String = "",
+    val favoriteStatus: Map<Int, Boolean> = emptyMap()
 )
 
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
@@ -52,7 +55,7 @@ class FeedViewModel @Inject constructor(
             selectedType.isNotBlank() && type == "type" -> pokemonRepository.searchPokemon(selectedType, type)
             else -> pokemonRepository.getPokemonFeed()
         }
-    }.cachedIn(viewModelScope)
+    }
     
     val userStats: Flow<UserStats> = pokemonRepository.getUserStats()
         .stateIn(
@@ -86,13 +89,57 @@ class FeedViewModel @Inject constructor(
         }
     }
     
-    fun toggleFavorite(pokemonId: Int) {
+    fun toggleFavorite(pokemonId: Int, userId: String) {
         viewModelScope.launch {
-            pokemonRepository.toggleFavorite(pokemonId)
+            pokemonRepository.toggleFavorite(pokemonId, userId)
+                .onSuccess { newFavoriteStatus ->
+                    println("FeedViewModel - Toggled favorite for Pokemon $pokemonId (User: $userId): $newFavoriteStatus")
+                    // Update the local favorite status immediately for UI feedback
+                    val currentFavorites = _uiState.value.favoriteStatus.toMutableMap()
+                    currentFavorites[pokemonId] = newFavoriteStatus
+                    _uiState.value = _uiState.value.copy(favoriteStatus = currentFavorites)
+                }
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(error = error.message)
                 }
         }
+    }
+    
+    fun loadFavoriteStatus(pokemonId: Int, userId: String) {
+        viewModelScope.launch {
+            try {
+                val isFavorite = pokemonRepository.isFavorite(pokemonId, userId)
+                val currentFavorites = _uiState.value.favoriteStatus.toMutableMap()
+                currentFavorites[pokemonId] = isFavorite
+                _uiState.value = _uiState.value.copy(favoriteStatus = currentFavorites)
+                println("FeedViewModel - Loaded favorite status for Pokemon $pokemonId (User: $userId): $isFavorite")
+            } catch (e: Exception) {
+                println("FeedViewModel - Error loading favorite status: ${e.message}")
+            }
+        }
+    }
+    
+    fun loadFavoriteStatusBatch(pokemonIds: List<Int>, userId: String) {
+        viewModelScope.launch {
+            try {
+                val currentFavorites = _uiState.value.favoriteStatus.toMutableMap()
+                pokemonIds.forEach { pokemonId ->
+                    if (!currentFavorites.containsKey(pokemonId)) {
+                        val isFavorite = pokemonRepository.isFavorite(pokemonId, userId)
+                        currentFavorites[pokemonId] = isFavorite
+                        println("FeedViewModel - Batch loaded favorite status for Pokemon $pokemonId: $isFavorite")
+                    }
+                }
+                _uiState.value = _uiState.value.copy(favoriteStatus = currentFavorites)
+            } catch (e: Exception) {
+                println("FeedViewModel - Error loading batch favorite status: ${e.message}")
+            }
+        }
+    }
+    
+    fun clearFavoriteStatus() {
+        _uiState.value = _uiState.value.copy(favoriteStatus = emptyMap())
+        println("FeedViewModel - Cleared all favorite status")
     }
     
     fun clearError() {
@@ -100,6 +147,10 @@ class FeedViewModel @Inject constructor(
     }
     
     fun updateSearchQuery(query: String, searchType: String) {
+        // Show searching indicator for type searches or non-empty name searches
+        val isSearching = searchType == "type" || query.isNotBlank()
+        _uiState.value = _uiState.value.copy(isSearching = isSearching)
+        
         _searchQuery.value = query
         _searchType.value = searchType
         _uiState.value = _uiState.value.copy(searchQuery = query, searchType = searchType)
@@ -112,6 +163,9 @@ class FeedViewModel @Inject constructor(
     }
     
     fun updateSelectedType(type: String) {
+        // Show searching indicator when selecting a type
+        _uiState.value = _uiState.value.copy(isSearching = true)
+        
         _selectedType.value = type
         _searchType.value = "type"
         _uiState.value = _uiState.value.copy(selectedType = type, searchType = "type")
@@ -124,7 +178,11 @@ class FeedViewModel @Inject constructor(
     fun clearSearch() {
         _searchQuery.value = ""
         _selectedType.value = ""
-        _uiState.value = _uiState.value.copy(searchQuery = "", selectedType = "")
+        _uiState.value = _uiState.value.copy(searchQuery = "", selectedType = "", isSearching = false)
+    }
+    
+    fun setSearchingState(isSearching: Boolean) {
+        _uiState.value = _uiState.value.copy(isSearching = isSearching)
     }
     
     private fun loadTypes() {

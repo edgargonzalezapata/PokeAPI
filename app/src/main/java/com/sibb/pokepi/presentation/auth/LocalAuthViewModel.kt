@@ -19,7 +19,8 @@ data class LocalAuthUiState(
     val isBiometricEnabled: Boolean = false,
     val biometricCapability: BiometricCapability = BiometricCapability.UNKNOWN,
     val registrationSuccess: Boolean = false,
-    val storedUsername: String? = null
+    val storedUsername: String? = null,
+    val currentUserId: String? = null
 )
 
 @HiltViewModel
@@ -46,7 +47,8 @@ class LocalAuthViewModel @Inject constructor(
                     hasLocalAccount = isEnabled,
                     isLocalLoggedIn = isLoggedIn,
                     isBiometricEnabled = biometricEnabled,
-                    storedUsername = username
+                    storedUsername = username,
+                    currentUserId = if (isLoggedIn) username else null
                 )
             }.collect()
         }
@@ -90,6 +92,7 @@ class LocalAuthViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         isLocalLoggedIn = true,
+                        currentUserId = username,
                         error = null
                     )
                 }
@@ -121,6 +124,7 @@ class LocalAuthViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(
                         isLocalLoggedIn = true,
                         isLoading = false,
+                        currentUserId = _uiState.value.storedUsername,
                         error = null
                     )
                     println("DEBUG: Estado actualizado, llamando onSuccess")
@@ -141,7 +145,10 @@ class LocalAuthViewModel @Inject constructor(
     fun logoutLocal() {
         viewModelScope.launch {
             localAuthRepository.logoutLocal()
-            _uiState.value = _uiState.value.copy(isLocalLoggedIn = false)
+            _uiState.value = _uiState.value.copy(
+                isLocalLoggedIn = false,
+                currentUserId = null
+            )
         }
     }
     

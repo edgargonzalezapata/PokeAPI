@@ -122,3 +122,39 @@ data class UserStats(
     val lastActiveTime: Long = System.currentTimeMillis(),
     val createdAt: Long = System.currentTimeMillis()
 )
+
+// User-specific favorites
+@Entity(
+    tableName = "user_favorites",
+    primaryKeys = ["userId", "pokemonId"],
+    indices = [androidx.room.Index(value = ["userId"]), androidx.room.Index(value = ["pokemonId"])]
+)
+data class UserFavorite(
+    val userId: String,
+    val pokemonId: Int,
+    val addedAt: Long = System.currentTimeMillis()
+)
+
+// Type API responses
+data class TypeListResponse(
+    val count: Int,
+    val next: String?,
+    val previous: String?,
+    val results: List<TypeListItem>
+)
+
+data class TypeListItem(
+    val name: String,
+    val url: String
+)
+
+data class TypeResponse(
+    val id: Int,
+    val name: String,
+    val pokemon: List<TypePokemonEntry>
+)
+
+data class TypePokemonEntry(
+    val pokemon: PokemonListItem,
+    val slot: Int
+)

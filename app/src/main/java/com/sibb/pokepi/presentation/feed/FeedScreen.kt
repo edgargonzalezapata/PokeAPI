@@ -43,7 +43,8 @@ import java.util.*
 @Composable
 fun FeedScreen(
     onPokemonClick: (Pokemon) -> Unit = {},
-    viewModel: FeedViewModel = hiltViewModel()
+    viewModel: FeedViewModel = hiltViewModel(),
+    currentUserId: String? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val pokemonItems = viewModel.pokemonFeed.collectAsLazyPagingItems()
@@ -60,6 +61,12 @@ fun FeedScreen(
             // Hide pokeball when loading is complete and we have search results
             viewModel.setSearchingState(false)
         }
+    }
+
+    // Clear favorites when user changes
+    LaunchedEffect(currentUserId) {
+        println("FeedScreen - User changed to: $currentUserId, clearing favorite states")
+        viewModel.clearFavoriteStatus()
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -307,9 +314,25 @@ fun FeedScreen(
                     ) { index ->
                         val pokemon = pokemonItems[index]
                         pokemon?.let {
+                            // Load favorite status if not already loaded
+                            LaunchedEffect(it.id, currentUserId) {
+                                currentUserId?.let { userId ->
+                                    if (!uiState.favoriteStatus.containsKey(it.id)) {
+                                        viewModel.loadFavoriteStatus(it.id, userId)
+                                    }
+                                }
+                            }
+                            
+                            val isFavorite = uiState.favoriteStatus[it.id] ?: false
+                            
                             PokemonPostCard(
                                 pokemon = it,
-                                onFavoriteClick = { viewModel.toggleFavorite(it.id) },
+                                isFavorite = isFavorite,
+                                onFavoriteClick = { 
+                                    currentUserId?.let { userId ->
+                                        viewModel.toggleFavorite(it.id, userId)
+                                    }
+                                },
                                 onClick = { onPokemonClick(it) },
                                 modifier = Modifier.fillMaxWidth()
                             )
@@ -433,6 +456,7 @@ private fun StatItem(
 @Composable
 private fun PokemonPostCard(
     pokemon: Pokemon,
+    isFavorite: Boolean,
     onFavoriteClick: () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -496,9 +520,9 @@ private fun PokemonPostCard(
                         )
                 ) {
                     Icon(
-                        imageVector = if (pokemon.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                         contentDescription = "Favorite",
-                        tint = if (pokemon.isFavorite) Color.Red else Color.Gray
+                        tint = if (isFavorite) Color.Red else Color.Gray
                     )
                 }
             }
