@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.sibb.pokepi.data.repository.BiometricCapability
+import com.sibb.pokepi.ui.components.PokeBallLoadingIndicator
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -242,9 +243,10 @@ fun LocalRegisterScreen(
                 enabled = canRegister
             ) {
                 if (uiState.isLoading) {
-                    CircularProgressIndicator(
+                    PokeBallLoadingIndicator(
                         modifier = Modifier.size(20.dp),
-                        color = MaterialTheme.colorScheme.onPrimary
+                        size = 20,
+                        showText = false
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                 }

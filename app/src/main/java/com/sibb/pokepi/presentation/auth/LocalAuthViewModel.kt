@@ -103,18 +103,29 @@ class LocalAuthViewModel @Inject constructor(
     }
     
     fun authenticateWithBiometric(activity: FragmentActivity, onSuccess: () -> Unit) {
+        println("DEBUG: ViewModel.authenticateWithBiometric llamado")
+        // Clear any previous errors
+        _uiState.value = _uiState.value.copy(error = null, isLoading = true)
+        
         localAuthRepository.authenticateWithBiometric(
             activity,
             onSuccess = {
                 viewModelScope.launch {
                     // Set logged in state directly for biometric login
                     localAuthRepository.setLocalLoggedIn(true)
-                    _uiState.value = _uiState.value.copy(isLocalLoggedIn = true)
+                    _uiState.value = _uiState.value.copy(
+                        isLocalLoggedIn = true,
+                        isLoading = false,
+                        error = null
+                    )
                     onSuccess()
                 }
             },
             onError = { error ->
-                _uiState.value = _uiState.value.copy(error = error)
+                _uiState.value = _uiState.value.copy(
+                    error = error,
+                    isLoading = false
+                )
             }
         )
     }

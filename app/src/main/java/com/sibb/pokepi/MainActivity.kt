@@ -30,6 +30,7 @@ import com.sibb.pokepi.presentation.home.HomeScreen
 import com.sibb.pokepi.presentation.feed.FeedScreen
 import com.sibb.pokepi.presentation.favorites.FavoritesScreen
 import com.sibb.pokepi.ui.theme.PokePITheme
+import com.sibb.pokepi.ui.components.PokeBallLoadingIndicator
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -127,13 +128,10 @@ fun PokeApp() {
                         .padding(innerPadding),
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        CircularProgressIndicator()
-                        Text("Autenticando...")
-                    }
+                    PokeBallLoadingIndicator(
+                        size = 80,
+                        text = "Autenticando..."
+                    )
                 }
             }
         }

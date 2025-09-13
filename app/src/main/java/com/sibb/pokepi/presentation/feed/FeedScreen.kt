@@ -17,12 +17,19 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.animation.core.*
+import com.sibb.pokepi.R
+import com.sibb.pokepi.ui.components.CenterLoading
+import com.sibb.pokepi.ui.components.PokeBallLoadingIndicator
+import com.sibb.pokepi.ui.components.FullScreenLoading
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.activity.compose.BackHandler
 import androidx.paging.LoadState
@@ -45,6 +52,15 @@ fun FeedScreen(
     var searchQuery by remember { mutableStateOf("") }
     var searchType by remember { mutableStateOf("name") } // "name", "type"
     var showTypeDropdown by remember { mutableStateOf(false) }
+    
+    // Monitor loading state to control pokeball visibility
+    val isLoadingResults = pokemonItems.loadState.refresh is LoadState.Loading
+    LaunchedEffect(isLoadingResults, uiState.selectedType, uiState.searchQuery) {
+        if (!isLoadingResults && (uiState.selectedType.isNotEmpty() || uiState.searchQuery.isNotEmpty())) {
+            // Hide pokeball when loading is complete and we have search results
+            viewModel.setSearchingState(false)
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Header
@@ -173,94 +189,159 @@ fun FeedScreen(
                     }
                 }
                 
-                // Search type selector
+                // Search type selector and loading indicator
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    FilterChip(
-                        onClick = { 
-                            searchType = "name"
-                            if (searchQuery.isNotEmpty()) {
-                                viewModel.updateSearchQuery(searchQuery, searchType)
-                            }
-                        },
-                        label = { Text("Nombre") },
-                        selected = searchType == "name"
-                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        FilterChip(
+                            onClick = { 
+                                searchType = "name"
+                                if (searchQuery.isNotEmpty()) {
+                                    viewModel.updateSearchQuery(searchQuery, searchType)
+                                }
+                            },
+                            label = { Text("Nombre") },
+                            selected = searchType == "name"
+                        )
+                        
+                        FilterChip(
+                            onClick = { 
+                                searchType = "type"
+                                if (searchQuery.isNotEmpty()) {
+                                    viewModel.updateSearchQuery(searchQuery, searchType)
+                                }
+                            },
+                            label = { Text("Tipo") },
+                            selected = searchType == "type"
+                        )
+                    }
                     
-                    FilterChip(
-                        onClick = { 
-                            searchType = "type"
-                            if (searchQuery.isNotEmpty()) {
-                                viewModel.updateSearchQuery(searchQuery, searchType)
-                            }
-                        },
-                        label = { Text("Tipo") },
-                        selected = searchType == "type"
-                    )
+                    // Searching indicator - positioned to the right
+                    if (uiState.isSearching) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            PokeBallLoadingIndicator()
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Buscando...",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
                 }
             }
         }
         
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(16.dp)
-        ) {
-            // User Stats Header
-            item {
-                UserStatsCard(
-                    userStats = userStats,
-                    modifier = Modifier.fillMaxWidth()
+        // Show loading screen when refreshing (initial load or filter changes)
+        when (pokemonItems.loadState.refresh) {
+            is LoadState.Loading -> {
+                FullScreenLoading(
+                    text = if (uiState.selectedType.isNotEmpty() || uiState.searchQuery.isNotEmpty()) {
+                        "Aplicando filtros..."
+                    } else {
+                        "Cargando Pokémon..."
+                    }
                 )
             }
-
-            // Pokemon Feed
-            items(
-                count = pokemonItems.itemCount,
-                key = { index -> pokemonItems.peek(index)?.id ?: index }
-            ) { index ->
-                val pokemon = pokemonItems[index]
-                pokemon?.let {
-                    PokemonPostCard(
-                        pokemon = it,
-                        onFavoriteClick = { viewModel.toggleFavorite(it.id) },
-                        onClick = { onPokemonClick(it) },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            }
-
-            // Loading states
-            when (pokemonItems.loadState.append) {
-                is LoadState.Loading -> {
-                    item {
-                        Box(
-                            modifier = Modifier.fillMaxWidth(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator()
-                        }
-                    }
-                }
-                is LoadState.Error -> {
-                    item {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer
-                            )
+            is LoadState.Error -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = "Error loading more Pokémon",
-                                modifier = Modifier.padding(16.dp),
+                                text = "😞",
+                                style = MaterialTheme.typography.displayMedium
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Error al cargar Pokémon",
+                                style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onErrorContainer
                             )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Button(
+                                onClick = { pokemonItems.retry() }
+                            ) {
+                                Text("Reintentar")
+                            }
                         }
                     }
                 }
-                else -> {}
+            }
+            else -> {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(16.dp)
+                ) {
+                    // User Stats Header
+                    item {
+                        UserStatsCard(
+                            userStats = userStats,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    // Pokemon Feed
+                    items(
+                        count = pokemonItems.itemCount,
+                        key = { index -> pokemonItems.peek(index)?.id ?: index }
+                    ) { index ->
+                        val pokemon = pokemonItems[index]
+                        pokemon?.let {
+                            PokemonPostCard(
+                                pokemon = it,
+                                onFavoriteClick = { viewModel.toggleFavorite(it.id) },
+                                onClick = { onPokemonClick(it) },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+
+                    // Loading states for pagination
+                    when (pokemonItems.loadState.append) {
+                        is LoadState.Loading -> {
+                            item {
+                                CenterLoading(text = "Cargando más Pokémon...")
+                            }
+                        }
+                        is LoadState.Error -> {
+                            item {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.errorContainer
+                                    )
+                                ) {
+                                    Text(
+                                        text = "Error loading more Pokémon",
+                                        modifier = Modifier.padding(16.dp),
+                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                }
+                            }
+                        }
+                        else -> {}
+                    }
+                }
             }
         }
     }
@@ -534,6 +615,7 @@ private fun formatTime(milliseconds: Long): String {
         else -> "${minutes / 60}h ${minutes % 60}m"
     }
 }
+
 
 private fun getTypeDisplayName(type: String): String {
     return when (type) {

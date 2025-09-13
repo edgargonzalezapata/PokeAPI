@@ -25,6 +25,7 @@ import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import coil.compose.AsyncImage
 import com.sibb.pokepi.data.model.Pokemon
+import com.sibb.pokepi.ui.components.CenterLoading
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -113,12 +114,7 @@ fun FavoritesScreen(
                 when (favoriteItems.loadState.append) {
                     is LoadState.Loading -> {
                         item {
-                            Box(
-                                modifier = Modifier.fillMaxWidth(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator()
-                            }
+                            CenterLoading(text = "Cargando más favoritos...")
                         }
                     }
                     is LoadState.Error -> {

@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.sibb.pokepi.data.repository.BiometricCapability
+import com.sibb.pokepi.ui.components.PokeBallLoadingIndicator
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,7 +35,16 @@ fun LocalLoginScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
-    val activity = context as? FragmentActivity
+    val fragmentActivity = remember(context) {
+        var ctx = context
+        while (ctx is android.content.ContextWrapper) {
+            if (ctx is FragmentActivity) {
+                return@remember ctx
+            }
+            ctx = ctx.baseContext
+        }
+        null
+    }
     val keyboardController = LocalSoftwareKeyboardController.current
     
     var username by remember { mutableStateOf("") }
@@ -46,8 +56,17 @@ fun LocalLoginScreen(
     
     // Check biometric capability
     LaunchedEffect(Unit) {
+        println("DEBUG: LocalLoginScreen inicializado")
+        println("DEBUG: Context tipo: ${context::class.simpleName}")
+        println("DEBUG: FragmentActivity encontrado: ${fragmentActivity != null}")
         viewModel.checkBiometricCapability(context)
     }
+    
+    // Debug UI state changes
+    LaunchedEffect(uiState.biometricCapability, uiState.hasLocalAccount, uiState.isBiometricEnabled) {
+        println("DEBUG: UI State cambió - hasLocalAccount: ${uiState.hasLocalAccount}, biometricCapability: ${uiState.biometricCapability}, isBiometricEnabled: ${uiState.isBiometricEnabled}")
+    }
+    
     
     // Handle login success
     LaunchedEffect(uiState.isLocalLoggedIn) {
@@ -148,36 +167,51 @@ fun LocalLoginScreen(
             enabled = username.isNotBlank() && password.isNotBlank() && !uiState.isLoading
         ) {
             if (uiState.isLoading) {
-                CircularProgressIndicator(
+                PokeBallLoadingIndicator(
                     modifier = Modifier.size(20.dp),
-                    color = MaterialTheme.colorScheme.onPrimary
+                    size = 20,
+                    showText = false
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             }
             Text("Iniciar Sesión")
         }
         
+        
         // Biometric options
         if (uiState.biometricCapability == BiometricCapability.AVAILABLE && uiState.hasLocalAccount) {
             Spacer(modifier = Modifier.height(16.dp))
             
             if (uiState.isBiometricEnabled) {
+                println("DEBUG: Mostrando botón de biometría - habilitado: ${!uiState.isLoading}")
                 // Biometric login button
                 OutlinedButton(
                     onClick = {
-                        activity?.let { fragmentActivity ->
+                        println("DEBUG: Botón biométrico presionado")
+                        fragmentActivity?.let { fActivity ->
+                            println("DEBUG: FragmentActivity encontrado: ${fActivity::class.simpleName}")
                             viewModel.authenticateWithBiometric(
-                                fragmentActivity,
+                                fActivity,
                                 onLoginSuccess
                             )
-                        }
+                        } ?: println("DEBUG: FragmentActivity es null")
                     },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !uiState.isLoading
                 ) {
-                    Text("🔒")
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Usar Biometría")
+                    if (uiState.isLoading) {
+                        PokeBallLoadingIndicator(
+                            modifier = Modifier.size(16.dp),
+                            size = 16,
+                            showText = false
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Autenticando...")
+                    } else {
+                        Text("🔒")
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Usar Biometría")
+                    }
                 }
             } else {
                 // Enable biometric button
