@@ -14,6 +14,10 @@ import com.sibb.pokepi.data.paging.NameSearchPagingSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import com.sibb.pokepi.notification.NotificationRepository
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -22,7 +26,8 @@ class PokemonRepository @Inject constructor(
     private val pokeApiService: PokeApiService,
     private val pokemonDao: PokemonDao,
     private val userStatsDao: UserStatsDao,
-    private val userFavoriteDao: UserFavoriteDao
+    private val userFavoriteDao: UserFavoriteDao,
+    private val notificationRepository: NotificationRepository
 ) {
     
     @OptIn(ExperimentalPagingApi::class)
@@ -45,6 +50,24 @@ class PokemonRepository @Inject constructor(
                 // Increment view count
                 pokemonDao.incrementViewCount(id)
                 updateUserStats()
+                
+                // Update data in background without blocking UI
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                    try {
+                        val response = pokeApiService.getPokemonDetails(id)
+                        if (response.isSuccessful && response.body() != null) {
+                            val updatedPokemon = response.body()!!.copy(
+                                viewCount = cachedPokemon.viewCount + 1, // Preserve incremented view count
+                                isFavorite = cachedPokemon.isFavorite, // Preserve favorite status
+                                firstSeenAt = cachedPokemon.firstSeenAt // Preserve first seen timestamp
+                            )
+                            pokemonDao.insertPokemon(updatedPokemon)
+                        }
+                    } catch (e: Exception) {
+                        // Ignore background update failures
+                    }
+                }
+                
                 return Result.success(cachedPokemon.copy(viewCount = cachedPokemon.viewCount + 1))
             }
             
@@ -75,6 +98,23 @@ class PokemonRepository @Inject constructor(
             }
             println("PokemonRepository - Toggled favorite for Pokemon $pokemonId (User: $userId): $newFavoriteStatus")
             updateUserStats(userId)
+            
+            // Enviar notificación solo cuando se agrega un favorito (no cuando se quita)
+            if (newFavoriteStatus) {
+                // Obtener información del Pokémon para la notificación
+                val pokemon = pokemonDao.getPokemonById(pokemonId)
+                if (pokemon != null) {
+                    // Enviar notificación en segundo plano
+                    CoroutineScope(Dispatchers.IO).launch {
+                        try {
+                            notificationRepository.sendFavoriteAddedNotification(pokemon.name, pokemonId)
+                        } catch (e: Exception) {
+                            println("PokemonRepository - Error enviando notificación: ${e.message}")
+                        }
+                    }
+                }
+            }
+            
             Result.success(newFavoriteStatus)
         } catch (e: Exception) {
             println("PokemonRepository - Error toggling favorite: ${e.message}")
@@ -158,20 +198,7 @@ class PokemonRepository @Inject constructor(
     
     suspend fun getAllTypes(): List<String> {
         return try {
-            // First try to get from API
-            val response = pokeApiService.getAllTypes()
-            if (response.isSuccessful && response.body() != null) {
-                val apiTypes = response.body()!!.results
-                    .map { it.name }
-                    .filter { it in listOf("normal", "fire", "water", "electric", "grass", "ice", "fighting", "poison", "ground", "flying", "psychic", "bug", "rock", "ghost", "dragon", "dark", "steel", "fairy") }
-                    .sorted()
-                
-                if (apiTypes.isNotEmpty()) {
-                    return apiTypes
-                }
-            }
-            
-            // Fallback to local database
+            // First try to get from local database (cache-first)
             val typesStrings = pokemonDao.getAllTypes()
             val allTypes = mutableSetOf<String>()
             
@@ -180,9 +207,37 @@ class PokemonRepository @Inject constructor(
                 allTypes.addAll(typeNames)
             }
             
-            allTypes.toList().sorted()
+            val cachedTypes = allTypes.toList().sorted()
+            
+            // If we have cached types, return them immediately and update in background
+            if (cachedTypes.isNotEmpty()) {
+                // Update data in background
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                    try {
+                        val response = pokeApiService.getAllTypes()
+                        // Background update completed successfully, but we already returned cached data
+                    } catch (e: Exception) {
+                        // Ignore background update failures
+                    }
+                }
+                return cachedTypes
+            }
+            
+            // If no local data, fetch from API
+            val response = pokeApiService.getAllTypes()
+            if (response.isSuccessful && response.body() != null) {
+                val apiTypes = response.body()!!.results
+                    .map { it.name }
+                    .filter { it in listOf("normal", "fire", "water", "electric", "grass", "ice", "fighting", "poison", "ground", "flying", "psychic", "bug", "rock", "ghost", "dragon", "dark", "steel", "fairy") }
+                    .sorted()
+                
+                return apiTypes
+            } else {
+                // API failed and no local data
+                emptyList()
+            }
         } catch (e: Exception) {
-            // If API fails, try local database as fallback
+            // If there's an exception, try local database as final fallback
             try {
                 val typesStrings = pokemonDao.getAllTypes()
                 val allTypes = mutableSetOf<String>()

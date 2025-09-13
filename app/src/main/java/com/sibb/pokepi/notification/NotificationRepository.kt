@@ -20,6 +20,7 @@ import com.sibb.pokepi.MainActivity
 import com.sibb.pokepi.R
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -168,6 +169,73 @@ class NotificationRepository @Inject constructor(
             Log.d(TAG, "Desuscrito de todos los topics")
         } catch (e: Exception) {
             Log.e(TAG, "Error desuscribiéndose de topics", e)
+        }
+    }
+
+    // Método para enviar notificación cuando se agrega un favorito
+    suspend fun sendFavoriteAddedNotification(pokemonName: String, pokemonId: Int) {
+        try {
+            // Verificar si las notificaciones de favoritos están habilitadas
+            val favoriteNotificationsEnabled = context.notificationDataStore.data.map { 
+                it[FAVORITE_UPDATES_ENABLED] ?: true 
+            }
+            
+            val isEnabled = favoriteNotificationsEnabled.first() // Obtener el valor actual
+            if (!isEnabled) {
+                Log.d(TAG, "Notificaciones de favoritos deshabilitadas")
+                return
+            }
+
+            val intent = Intent(context, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                // Agregar extra para navegar directamente a la sección de favoritos
+                putExtra("navigate_to", "favorites")
+                putExtra("pokemon_id", pokemonId)
+            }
+
+            val pendingIntent = PendingIntent.getActivity(
+                context,
+                pokemonId, // Usar pokemonId como requestCode único
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val title = "⭐ Nuevo Pokémon Favorito"
+            val body = "¡Has agregado a ${pokemonName.replaceFirstChar { it.titlecase() }} a tus favoritos!"
+
+            val notificationBuilder = NotificationCompat.Builder(context, "pokemon_favorites_channel")
+                .setSmallIcon(R.drawable.pokemon_icon)
+                .setContentTitle(title)
+                .setContentText(body)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+                .setAutoCancel(true)
+                .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION))
+                .setContentIntent(pendingIntent)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setColor(context.getColor(R.color.pokemon_electric))
+                .setGroup("pokemon_favorites_group")
+
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+            // Crear canal para Android O+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channel = NotificationChannel(
+                    "pokemon_favorites_channel",
+                    "Favoritos Pokémon",
+                    NotificationManager.IMPORTANCE_DEFAULT
+                ).apply {
+                    description = "Notificaciones cuando agregas un Pokémon a favoritos"
+                    enableVibration(true)
+                    setShowBadge(true)
+                }
+                notificationManager.createNotificationChannel(channel)
+            }
+
+            // Usar pokemonId como notification ID para que cada Pokémon tenga su propia notificación
+            notificationManager.notify(1000 + pokemonId, notificationBuilder.build())
+            Log.d(TAG, "Notificación de favorito enviada para $pokemonName (ID: $pokemonId)")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error enviando notificación de favorito para $pokemonName", e)
         }
     }
 

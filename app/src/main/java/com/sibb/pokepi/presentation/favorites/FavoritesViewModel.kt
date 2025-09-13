@@ -77,4 +77,22 @@ class FavoritesViewModel @Inject constructor(
     fun clearError() {
         _uiState.value = _uiState.value.copy(error = null)
     }
+    
+    fun getPokemonById(pokemonId: Int, onResult: (Pokemon?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                pokemonRepository.getPokemonDetails(pokemonId)
+                    .onSuccess { pokemon ->
+                        onResult(pokemon)
+                    }
+                    .onFailure { error ->
+                        println("FavoritesViewModel - Error getting Pokemon $pokemonId: ${error.message}")
+                        onResult(null)
+                    }
+            } catch (e: Exception) {
+                println("FavoritesViewModel - Exception getting Pokemon $pokemonId: ${e.message}")
+                onResult(null)
+            }
+        }
+    }
 }

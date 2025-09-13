@@ -14,6 +14,8 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.collect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -57,7 +59,17 @@ class MainActivity : FragmentActivity() {
     
     lateinit var authViewModel: AuthViewModel
     
+    // Callback para manejar navegación desde notificaciones
+    var onNavigationFromNotification: ((String, Int?) -> Unit)? = null
+    
+    // Variables para almacenar navegación pendiente
+    internal var pendingNavigationTarget: String? = null
+    internal var pendingNavigationPokemonId: Int? = null
+    
     private fun handleIntent(intent: Intent) {
+        println("MainActivity.handleIntent - Processing intent: $intent")
+        println("MainActivity.handleIntent - Intent extras: ${intent.extras?.keySet()}")
+        
         val uri = intent.data
         println("MainActivity.handleIntent - URI: $uri")
         if (uri != null && uri.scheme == "pokepi" && uri.host == "oauth") {
@@ -72,6 +84,28 @@ class MainActivity : FragmentActivity() {
                     pendingOauthCode = authCode
                 }
             }
+        }
+        
+        // Manejar navegación desde notificaciones - usando callback directo o almacenar si no está disponible
+        val navigateTo = intent.getStringExtra("navigate_to")
+        val pokemonId = intent.getIntExtra("pokemon_id", -1)
+        
+        println("MainActivity.handleIntent - navigateTo: $navigateTo, pokemonId: $pokemonId")
+        
+        if (navigateTo != null) {
+            println("MainActivity.handleIntent - Navigation from notification: $navigateTo, Pokemon ID: $pokemonId")
+            val finalPokemonId = if (pokemonId != -1) pokemonId else null
+            
+            if (onNavigationFromNotification != null) {
+                println("MainActivity.handleIntent - Triggering navigation callback immediately: $navigateTo, $finalPokemonId")
+                onNavigationFromNotification?.invoke(navigateTo, finalPokemonId)
+            } else {
+                println("MainActivity.handleIntent - Callback not available, storing for later: $navigateTo, $finalPokemonId")
+                pendingNavigationTarget = navigateTo
+                pendingNavigationPokemonId = finalPokemonId
+            }
+        } else {
+            println("MainActivity.handleIntent - No navigation data found in intent")
         }
     }
     
@@ -90,11 +124,50 @@ fun PokeApp() {
     // Navigation state - inicio siempre va al feed
     var currentScreen by remember { mutableStateOf("feed") }
     var authScreen by remember { mutableStateOf("local_login") } // "local_login", "local_register", "github_auth"
+    var pendingPokemonToShow by remember { mutableStateOf<Int?>(null) }
     
-    // Asignar el ViewModel a la Activity
+    val uiState by authViewModel.uiState.collectAsState()
+    val localUiState by localAuthViewModel.uiState.collectAsState()
+    
+    // Determine if user is logged in through any method
+    val isLoggedIn = uiState.isLoggedIn || localUiState.isLocalLoggedIn
+    
+    // Asignar el ViewModel a la Activity y configurar callback de navegación
     LaunchedEffect(authViewModel) {
         val activity = context as? MainActivity
         activity?.authViewModel = authViewModel
+        
+        // Configurar callback para navegación desde notificaciones
+        activity?.onNavigationFromNotification = { target, pokemonId ->
+            println("MainActivity - Received navigation callback: target='$target', pokemonId=$pokemonId")
+            if (isLoggedIn && target.isNotEmpty()) {
+                when (target) {
+                    "favorites" -> {
+                        println("MainActivity - Navigating to favorites from callback")
+                        currentScreen = "favorites"
+                        pokemonId?.let { id ->
+                            pendingPokemonToShow = id
+                            println("MainActivity - Setting pending Pokemon ID: $id")
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Procesar navegación pendiente si existe
+        activity?.let { act ->
+            if (act.pendingNavigationTarget != null) {
+                val target = act.pendingNavigationTarget!!
+                val pokemonId = act.pendingNavigationPokemonId
+                println("MainActivity - Processing pending navigation: $target, $pokemonId")
+                
+                act.onNavigationFromNotification?.invoke(target, pokemonId)
+                
+                // Limpiar navegación pendiente
+                act.pendingNavigationTarget = null
+                act.pendingNavigationPokemonId = null
+            }
+        }
         
         // Procesar código pendiente si existe
         MainActivity.pendingOauthCode?.let { code ->
@@ -103,12 +176,6 @@ fun PokeApp() {
             MainActivity.pendingOauthCode = null
         }
     }
-    
-    val uiState by authViewModel.uiState.collectAsState()
-    val localUiState by localAuthViewModel.uiState.collectAsState()
-    
-    // Determine if user is logged in through any method
-    val isLoggedIn = uiState.isLoggedIn || localUiState.isLocalLoggedIn
     
     // Manejar el botón de atrás - volver a feed (inicio) o perfil desde notificaciones
     BackHandler(enabled = currentScreen != "feed" && isLoggedIn) {
@@ -214,11 +281,15 @@ fun PokeApp() {
                         when (currentScreen) {
                             "feed" -> FeedScreen(
                                 onPokemonClick = { /* TODO: Navigate to details */ },
-                                currentUserId = currentUserId
+                                currentUserId = currentUserId,
+                                pokemonToShow = if (currentScreen == "feed") pendingPokemonToShow else null,
+                                onPokemonShown = { pendingPokemonToShow = null }
                             )
                             "favorites" -> FavoritesScreen(
                                 onPokemonClick = { /* TODO: Navigate to details */ },
-                                currentUserId = currentUserId
+                                currentUserId = currentUserId,
+                                pokemonToShow = if (currentScreen == "favorites") pendingPokemonToShow else null,
+                                onPokemonShown = { pendingPokemonToShow = null }
                             )
                             "profile" -> ProfileScreen(
                                 user = uiState.user,

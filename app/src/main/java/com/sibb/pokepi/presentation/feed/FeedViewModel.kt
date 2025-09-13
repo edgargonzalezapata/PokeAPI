@@ -185,6 +185,24 @@ class FeedViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(isSearching = isSearching)
     }
     
+    fun getPokemonById(pokemonId: Int, onResult: (Pokemon?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                pokemonRepository.getPokemonDetails(pokemonId)
+                    .onSuccess { pokemon ->
+                        onResult(pokemon)
+                    }
+                    .onFailure { error ->
+                        println("FeedViewModel - Error getting Pokemon $pokemonId: ${error.message}")
+                        onResult(null)
+                    }
+            } catch (e: Exception) {
+                println("FeedViewModel - Exception getting Pokemon $pokemonId: ${e.message}")
+                onResult(null)
+            }
+        }
+    }
+    
     private fun loadTypes() {
         viewModelScope.launch {
             try {

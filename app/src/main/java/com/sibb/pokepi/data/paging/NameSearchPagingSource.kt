@@ -8,6 +8,9 @@ import com.sibb.pokepi.data.model.Pokemon
 import com.sibb.pokepi.data.model.PokemonListItem
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class NameSearchPagingSource(
     private val pokeApiService: PokeApiService,
@@ -18,8 +21,43 @@ class NameSearchPagingSource(
     override suspend fun load(params: LoadParams<Int>): LoadResult<Int, Pokemon> {
         return try {
             val page = params.key ?: 0
+            val pageSize = params.loadSize
             
-            // First, get the complete list of Pokemon from API (up to 1500)
+            // CACHE-FIRST STRATEGY: Try local database first
+            val localResults = try {
+                pokemonDao.searchPokemon(searchQuery).first()
+            } catch (e: Exception) {
+                emptyList()
+            }
+            
+            if (localResults.isNotEmpty()) {
+                // We have local data, return it immediately and update in background
+                val startIndex = page * pageSize
+                val endIndex = minOf(startIndex + pageSize, localResults.size)
+                
+                if (startIndex >= localResults.size) {
+                    return LoadResult.Page(
+                        data = emptyList(),
+                        prevKey = if (page == 0) null else page - 1,
+                        nextKey = null
+                    )
+                }
+                
+                val localPageData = localResults.subList(startIndex, endIndex)
+                
+                // Update data in background without blocking UI
+                CoroutineScope(Dispatchers.IO).launch {
+                    updateNameSearchDataInBackground()
+                }
+                
+                return LoadResult.Page(
+                    data = localPageData,
+                    prevKey = if (page == 0) null else page - 1,
+                    nextKey = if (endIndex >= localResults.size) null else page + 1
+                )
+            }
+            
+            // No local data, fetch from API
             val response = pokeApiService.getPokemonList(limit = 1500, offset = 0)
             
             if (response.isSuccessful && response.body() != null) {
@@ -31,7 +69,6 @@ class NameSearchPagingSource(
                 }
                 
                 // Calculate pagination for filtered results
-                val pageSize = params.loadSize
                 val startIndex = page * pageSize
                 val endIndex = minOf(startIndex + pageSize, filteredPokemon.size)
                 
@@ -83,20 +120,80 @@ class NameSearchPagingSource(
                     nextKey = if (endIndex >= filteredPokemon.size) null else page + 1
                 )
             } else {
-                // Fallback to local database search
-                val localResults = try {
+                // API failed, try local database as final fallback
+                val fallbackResults = try {
                     pokemonDao.searchPokemon(searchQuery).first()
                 } catch (e: Exception) {
                     emptyList()
                 }
+                
+                val startIndex = page * pageSize
+                val endIndex = minOf(startIndex + pageSize, fallbackResults.size)
+                
+                val fallbackPageData = if (startIndex < fallbackResults.size) {
+                    fallbackResults.subList(startIndex, endIndex)
+                } else {
+                    emptyList()
+                }
+                
                 LoadResult.Page(
-                    data = localResults,
-                    prevKey = null,
-                    nextKey = null
+                    data = fallbackPageData,
+                    prevKey = if (page == 0) null else page - 1,
+                    nextKey = if (endIndex >= fallbackResults.size) null else page + 1
                 )
             }
         } catch (e: Exception) {
-            LoadResult.Error(e)
+            // If there's an exception, try local database as final fallback
+            try {
+                val fallbackResults = pokemonDao.searchPokemon(searchQuery).first()
+                val startIndex = (params.key ?: 0) * params.loadSize
+                val endIndex = minOf(startIndex + params.loadSize, fallbackResults.size)
+                
+                val fallbackPageData = if (startIndex < fallbackResults.size) {
+                    fallbackResults.subList(startIndex, endIndex)
+                } else {
+                    emptyList()
+                }
+                
+                LoadResult.Page(
+                    data = fallbackPageData,
+                    prevKey = if ((params.key ?: 0) == 0) null else (params.key ?: 0) - 1,
+                    nextKey = if (endIndex >= fallbackResults.size) null else (params.key ?: 0) + 1
+                )
+            } catch (localException: Exception) {
+                LoadResult.Error(e)
+            }
+        }
+    }
+    
+    private suspend fun updateNameSearchDataInBackground() {
+        try {
+            val response = pokeApiService.getPokemonList(limit = 1500, offset = 0)
+            if (response.isSuccessful && response.body() != null) {
+                val pokemonListResponse = response.body()!!
+                
+                // Filter Pokemon by name that contains the search query (case insensitive)
+                val filteredPokemon = pokemonListResponse.results.filter { pokemonItem ->
+                    pokemonItem.name.contains(searchQuery, ignoreCase = true)
+                }
+                
+                // Update Pokemon data in background
+                filteredPokemon.forEach { pokemonItem ->
+                    try {
+                        val pokemonResponse = pokeApiService.getPokemonDetails(pokemonItem.id)
+                        if (pokemonResponse.isSuccessful && pokemonResponse.body() != null) {
+                            val pokemon = pokemonResponse.body()!!
+                            // Preserve local data when updating
+                            pokemonDao.insertPokemonPreservingLocalData(pokemon)
+                        }
+                        delay(100) // Longer delay for background updates
+                    } catch (e: Exception) {
+                        // Ignore individual failures in background update
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            // Ignore background update failures
         }
     }
 

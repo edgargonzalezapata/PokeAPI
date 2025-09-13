@@ -6,6 +6,9 @@ import com.sibb.pokepi.data.api.PokeApiService
 import com.sibb.pokepi.data.database.PokemonDao
 import com.sibb.pokepi.data.model.Pokemon
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class TypeSearchPagingSource(
     private val pokeApiService: PokeApiService,
@@ -16,8 +19,39 @@ class TypeSearchPagingSource(
     override suspend fun load(params: LoadParams<Int>): LoadResult<Int, Pokemon> {
         return try {
             val page = params.key ?: 0
+            val pageSize = params.loadSize
             
-            // Get Pokemon of the specified type from API
+            // CACHE-FIRST STRATEGY: Try local database first
+            val localResults = pokemonDao.searchPokemonByType(typeName)
+            
+            if (localResults.isNotEmpty()) {
+                // We have local data, return it immediately and update in background
+                val startIndex = page * pageSize
+                val endIndex = minOf(startIndex + pageSize, localResults.size)
+                
+                if (startIndex >= localResults.size) {
+                    return LoadResult.Page(
+                        data = emptyList(),
+                        prevKey = if (page == 0) null else page - 1,
+                        nextKey = null
+                    )
+                }
+                
+                val localPageData = localResults.subList(startIndex, endIndex)
+                
+                // Update data in background without blocking UI
+                CoroutineScope(Dispatchers.IO).launch {
+                    updateTypeDataInBackground()
+                }
+                
+                return LoadResult.Page(
+                    data = localPageData,
+                    prevKey = if (page == 0) null else page - 1,
+                    nextKey = if (endIndex >= localResults.size) null else page + 1
+                )
+            }
+            
+            // No local data, fetch from API
             val response = pokeApiService.getPokemonByType(typeName)
             
             if (response.isSuccessful && response.body() != null) {
@@ -25,7 +59,6 @@ class TypeSearchPagingSource(
                 val pokemonEntries = typeData.pokemon
                 
                 // Calculate pagination
-                val pageSize = params.loadSize
                 val startIndex = page * pageSize
                 val endIndex = minOf(startIndex + pageSize, pokemonEntries.size)
                 
@@ -77,16 +110,70 @@ class TypeSearchPagingSource(
                     nextKey = if (endIndex >= pokemonEntries.size) null else page + 1
                 )
             } else {
-                // Fallback to local database search
-                val localResults = pokemonDao.searchPokemonByType(typeName)
+                // API failed, try local database as final fallback
+                val fallbackResults = pokemonDao.searchPokemonByType(typeName)
+                val startIndex = page * pageSize
+                val endIndex = minOf(startIndex + pageSize, fallbackResults.size)
+                
+                val fallbackPageData = if (startIndex < fallbackResults.size) {
+                    fallbackResults.subList(startIndex, endIndex)
+                } else {
+                    emptyList()
+                }
+                
                 LoadResult.Page(
-                    data = localResults,
-                    prevKey = null,
-                    nextKey = null
+                    data = fallbackPageData,
+                    prevKey = if (page == 0) null else page - 1,
+                    nextKey = if (endIndex >= fallbackResults.size) null else page + 1
                 )
             }
         } catch (e: Exception) {
-            LoadResult.Error(e)
+            // If there's an exception, try local database as final fallback
+            try {
+                val fallbackResults = pokemonDao.searchPokemonByType(typeName)
+                val startIndex = (params.key ?: 0) * params.loadSize
+                val endIndex = minOf(startIndex + params.loadSize, fallbackResults.size)
+                
+                val fallbackPageData = if (startIndex < fallbackResults.size) {
+                    fallbackResults.subList(startIndex, endIndex)
+                } else {
+                    emptyList()
+                }
+                
+                LoadResult.Page(
+                    data = fallbackPageData,
+                    prevKey = if ((params.key ?: 0) == 0) null else (params.key ?: 0) - 1,
+                    nextKey = if (endIndex >= fallbackResults.size) null else (params.key ?: 0) + 1
+                )
+            } catch (localException: Exception) {
+                LoadResult.Error(e)
+            }
+        }
+    }
+    
+    private suspend fun updateTypeDataInBackground() {
+        try {
+            val response = pokeApiService.getPokemonByType(typeName)
+            if (response.isSuccessful && response.body() != null) {
+                val typeData = response.body()!!
+                
+                // Update Pokemon data in background
+                typeData.pokemon.forEach { entry ->
+                    try {
+                        val pokemonResponse = pokeApiService.getPokemonDetails(entry.pokemon.id)
+                        if (pokemonResponse.isSuccessful && pokemonResponse.body() != null) {
+                            val pokemon = pokemonResponse.body()!!
+                            // Preserve local data when updating
+                            pokemonDao.insertPokemonPreservingLocalData(pokemon)
+                        }
+                        delay(100) // Longer delay for background updates
+                    } catch (e: Exception) {
+                        // Ignore individual failures in background update
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            // Ignore background update failures
         }
     }
 

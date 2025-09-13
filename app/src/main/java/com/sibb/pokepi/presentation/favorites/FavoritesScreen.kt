@@ -34,8 +34,14 @@ import java.util.*
 fun FavoritesScreen(
     onPokemonClick: (Pokemon) -> Unit = {},
     viewModel: FavoritesViewModel = hiltViewModel(),
-    currentUserId: String? = null
+    currentUserId: String? = null,
+    pokemonToShow: Int? = null,
+    onPokemonShown: () -> Unit = {}
 ) {
+    val uiState by viewModel.uiState.collectAsState()
+    val favoriteItems = viewModel.favoritePokemons.collectAsLazyPagingItems()
+    var selectedPokemon by remember { mutableStateOf<Pokemon?>(null) }
+
     LaunchedEffect(currentUserId) {
         println("FavoritesScreen - LaunchedEffect with currentUserId: $currentUserId")
         viewModel.clearFavoriteStatus()
@@ -44,9 +50,25 @@ fun FavoritesScreen(
             viewModel.setUserId(userId)
         }
     }
-    val uiState by viewModel.uiState.collectAsState()
-    val favoriteItems = viewModel.favoritePokemons.collectAsLazyPagingItems()
-    var selectedPokemon by remember { mutableStateOf<Pokemon?>(null) }
+    
+    // Handle Pokemon to show from notification
+    LaunchedEffect(pokemonToShow) {
+        println("FavoritesScreen - LaunchedEffect pokemonToShow: $pokemonToShow")
+        pokemonToShow?.let { pokemonId ->
+            println("FavoritesScreen - Received Pokemon to show from notification: $pokemonId")
+            // Obtener el Pokemon del ViewModel/Repository y mostrarlo
+            viewModel.getPokemonById(pokemonId) { pokemon ->
+                if (pokemon != null) {
+                    selectedPokemon = pokemon
+                    println("FavoritesScreen - Showing Pokemon from notification: ${pokemon.name}")
+                    onPokemonShown() // Limpiar el pending
+                } else {
+                    println("FavoritesScreen - Could not find Pokemon with ID: $pokemonId")
+                    onPokemonShown() // Limpiar el pending incluso si falla
+                }
+            }
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Header

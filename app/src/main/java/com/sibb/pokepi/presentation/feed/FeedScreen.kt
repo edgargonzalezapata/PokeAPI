@@ -45,7 +45,9 @@ import java.util.*
 fun FeedScreen(
     onPokemonClick: (Pokemon) -> Unit = {},
     viewModel: FeedViewModel = hiltViewModel(),
-    currentUserId: String? = null
+    currentUserId: String? = null,
+    pokemonToShow: Int? = null,
+    onPokemonShown: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val pokemonItems = viewModel.pokemonFeed.collectAsLazyPagingItems()
@@ -69,6 +71,25 @@ fun FeedScreen(
     LaunchedEffect(currentUserId) {
         println("FeedScreen - User changed to: $currentUserId, clearing favorite states")
         viewModel.clearFavoriteStatus()
+    }
+    
+    // Handle Pokemon to show from notification
+    LaunchedEffect(pokemonToShow) {
+        println("FeedScreen - LaunchedEffect pokemonToShow: $pokemonToShow")
+        pokemonToShow?.let { pokemonId ->
+            println("FeedScreen - Received Pokemon to show from notification: $pokemonId")
+            // Obtener el Pokemon del ViewModel/Repository y mostrarlo
+            viewModel.getPokemonById(pokemonId) { pokemon ->
+                if (pokemon != null) {
+                    selectedPokemon = pokemon
+                    println("FeedScreen - Showing Pokemon from notification: ${pokemon.name}")
+                    onPokemonShown() // Limpiar el pending
+                } else {
+                    println("FeedScreen - Could not find Pokemon with ID: $pokemonId")
+                    onPokemonShown() // Limpiar el pending incluso si falla
+                }
+            }
+        }
     }
 
     Column(modifier = Modifier.fillMaxSize()) {

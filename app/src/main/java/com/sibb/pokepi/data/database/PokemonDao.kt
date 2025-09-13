@@ -68,6 +68,9 @@ interface PokemonDao {
     @Query("SELECT COUNT(*) FROM pokemon")
     suspend fun getTotalPokemonCount(): Int
     
+    @Query("SELECT COUNT(*) FROM pokemon")
+    suspend fun getPokemonCount(): Int
+    
     @Query("SELECT COUNT(*) FROM pokemon WHERE isFavorite = 1")
     suspend fun getFavoritesCount(): Int
     
